@@ -258,10 +258,12 @@ nav button .nbadge{
   </div>
   <div class="screen" id="screen-receive">
     <div class="tab-row">
-      <button class="tab-btn active" onclick="switchTab('form')">入荷登録</button>
+      <button class="tab-btn active" onclick="switchTab('orders')">発注入庫</button>
+      <button class="tab-btn" onclick="switchTab('form')">手動入荷</button>
       <button class="tab-btn" onclick="switchTab('log')">入荷履歴</button>
     </div>
-    <div id="tab-form">
+    <div id="tab-orders"><div id="pendingOrders"></div></div>
+    <div id="tab-form" style="display:none;">
       <div class="f-card">
         <div class="f-grp"><label class="f-lbl">商品</label><select class="f-sel" id="recvProduct"></select></div>
         <div class="f-grp"><label class="f-lbl">入荷数量</label><div class="qty-row"><input type="number" class="f-in" id="recvQty" min="1" placeholder="0"><span class="qty-unit" id="recvUnit">本</span></div></div>
@@ -504,7 +506,7 @@ function renderOrder(){
   });
   h+=`<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
     <button class="btn btn-outline" onclick="genOrderText()">テキスト生成</button>
-    <button class="btn btn-primary" onclick="confirmOrder()">✓ 発注登録</button>
+    <button class="btn btn-primary" onclick="confirmOrder()">✓ 発注完了</button>
   </div>`;
   el.innerHTML=h;
 }
@@ -594,7 +596,7 @@ function receiveOrder(no){
   o.items.forEach(i=>{
     const p=products.find(x=>x.id===i.productId);
     if(p) p.stock+=i.qty;
-    receipts.unshift({id:nextId++,date:new Date().toISOString(),productName:i.productName,qty:i.qty,unit:i.unit,staff:'',note:`発注 ${no}`,unit:i.unit});
+    receipts.unshift({id:nextId++,date:new Date().toISOString(),productName:i.productName,qty:i.qty,unit:i.unit,staff:'',note:`発注 ${no}`});
   });
   o.status='received';o.receivedDate=new Date().toISOString();
   save();renderPendingOrders();renderStock();updateBadges();toast(`${no} 入庫しました！`);
