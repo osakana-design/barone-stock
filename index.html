@@ -240,6 +240,7 @@ nav button .nbadge{
     <div id="stockList"></div>
   </div>
   <div class="screen" id="screen-order">
+    <div class="filter-row" id="supplierFilter"></div>
     <div id="orderContent"></div>
   </div>
   <div class="screen" id="screen-receive">
@@ -312,7 +313,7 @@ nav button .nbadge{
   <div class="modal" onclick="event.stopPropagation()">
     <div class="m-handle"></div>
     <div class="m-title"><span id="prodModalTitle">商品を追加</span><button class="m-close" onclick="closeModal('prodModal')">✕</button></div>
-    <div class="f-grp"><label class="f-lbl">カテゴリ</label><input type="text" class="f-in" id="pCat" placeholder="ビール / リキュール / 割材 など"></div>
+    <div class="f-grp"><label class="f-lbl">カテゴリ</label><select class="f-sel" id="pCat"></select></div>
     <div class="f-grp"><label class="f-lbl">品名</label><input type="text" class="f-in" id="pName"></div>
     <div class="f-grp"><label class="f-lbl">規格</label><input type="text" class="f-in" id="pSpec" placeholder="350ml缶 / 1.8L など"></div>
     <div class="f-grp"><label class="f-lbl">単位</label><input type="text" class="f-in" id="pUnit" placeholder="本 / 個"></div>
@@ -381,7 +382,7 @@ const DEFAULT = [
 ];
 
 let products=[], receipts=[], nextId=200;
-let currentFilter="すべて", editStockId=null, editProdId=null;
+let currentFilter="すべて", orderSupFilter="すべて", editStockId=null, editProdId=null;
 
 function load(){
   const p=localStorage.getItem(PRODUCTS_KEY);
@@ -458,10 +459,20 @@ function getLow(){return products.filter(p=>p.stock<=p.reorder);}
 function renderOrder(){
   const low=getLow();
   const el=document.getElementById('orderContent');
+  const suppliers=["すべて",...new Set(low.map(p=>p.supplier))];
+  // supplier filter chips
+  document.getElementById('supplierFilter').innerHTML=suppliers.map(s=>
+    `<button class="chip ${s===orderSupFilter?'active':''}" onclick="setOrderFilter('${s}')">${s}</button>`
+  ).join('');
   if(!low.length){el.innerHTML=`<div class="empty"><div class="ei">✅</div><p><strong>発注が必要な商品はありません</strong>在庫に余裕があります。</p></div>`;return;}
+  const filtered=orderSupFilter==="すべて"?low:low.filter(p=>p.supplier===orderSupFilter);
   const byS={};
-  low.forEach(p=>{if(!byS[p.supplier])byS[p.supplier]=[];byS[p.supplier].push(p);});
-  let h=`<div class="order-banner"><span class="bi">⚠️</span><p><strong>${low.length}品目</strong>の発注が必要です。<br>数量を確認して発注してください。</p></div>`;
+  filtered.forEach(p=>{if(!byS[p.supplier])byS[p.supplier]=[];byS[p.supplier].push(p);});
+  let h='';
+  if(!filtered.length){
+    el.innerHTML=`<div class="empty"><div class="ei">✅</div><p>選択した発注先の要発注商品はありません。</p></div>`;return;
+  }
+  h+=`<div class="order-banner"><span class="bi">⚠️</span><p><strong>${filtered.length}品目</strong>の発注が必要です。<br>数量を確認して発注してください。</p></div>`;
   Object.entries(byS).forEach(([sup,items])=>{
     h+=`<div class="sec-title">${sup}</div>`;
     items.forEach(p=>{
@@ -480,11 +491,13 @@ function renderOrder(){
   </div>`;
   el.innerHTML=h;
 }
+function setOrderFilter(s){orderSupFilter=s;renderOrder();}
 function genOrderText(){
   const low=getLow();
+  const filtered=orderSupFilter==="すべて"?low:low.filter(p=>p.supplier===orderSupFilter);
   const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
   const byS={};
-  low.forEach(p=>{const q=parseInt(document.getElementById('oq_'+p.id)?.value)||p.orderQty;if(!byS[p.supplier])byS[p.supplier]=[];byS[p.supplier].push({...p,qty:q});});
+  filtered.forEach(p=>{const q=parseInt(document.getElementById('oq_'+p.id)?.value)||p.orderQty;if(!byS[p.supplier])byS[p.supplier]=[];byS[p.supplier].push({...p,qty:q});});
   let t=`Bar one 発注連絡\n${today}\n\n`;
   Object.entries(byS).forEach(([sup,items])=>{t+=`【${sup} 宛】\n`;items.forEach(i=>t+=`  ・${i.name}（${i.spec}）× ${i.qty}${i.unit}\n`);t+='\n';});
   t+='よろしくお願いいたします。';
@@ -492,7 +505,9 @@ function genOrderText(){
   openModal('orderModal');
 }
 function confirmOrder(){
-  getLow().forEach(p=>{const el=document.getElementById('oq_'+p.id);p.stock+=el?parseInt(el.value)||p.orderQty:p.orderQty;});
+  const low=getLow();
+  const filtered=orderSupFilter==="すべて"?low:low.filter(p=>p.supplier===orderSupFilter);
+  filtered.forEach(p=>{const el=document.getElementById('oq_'+p.id);p.stock+=el?parseInt(el.value)||p.orderQty:p.orderQty;});
   save();renderOrder();updateBadges();toast('発注完了！在庫に加算しました');
 }
 function copyOrder(){
@@ -545,12 +560,30 @@ function renderSettings(){
       <span class="s-arr">›</span>
     </div>`).join('');
 }
+function populateCatSelect(selected){
+  const existingCats=[...new Set(products.map(p=>p.cat))];
+  const sel=document.getElementById('pCat');
+  sel.innerHTML=existingCats.map(c=>`<option value="${c}" ${c===selected?'selected':''}>${c}</option>`).join('')
+    +'<option value="__new__">＋ 新しいカテゴリを入力...</option>';
+  sel.onchange=function(){
+    if(this.value==='__new__'){
+      const v=prompt('新しいカテゴリ名を入力してください');
+      if(v&&v.trim()){
+        const opt=document.createElement('option');
+        opt.value=v.trim();opt.textContent=v.trim();
+        this.insertBefore(opt,this.lastElementChild);
+        this.value=v.trim();
+      } else { this.value=existingCats[0]||'その他'; }
+    }
+  };
+}
 function openAddProduct(){
   editProdId=null;
   document.getElementById('prodModalTitle').textContent='商品を追加';
   document.getElementById('pDelBtn').style.display='none';
   document.getElementById('pSaveBtn').style.gridColumn='span 2';
-  ['pCat','pName','pSpec','pUnit'].forEach(id=>document.getElementById(id).value='');
+  populateCatSelect('');
+  ['pName','pSpec','pUnit'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('pStock').value=0;document.getElementById('pReorder').value=1;document.getElementById('pOrderQty').value=1;
   document.getElementById('pSupplier').value='奥野さん';
   openModal('prodModal');
@@ -561,7 +594,7 @@ function openEditProduct(id){
   document.getElementById('prodModalTitle').textContent='商品を編集';
   document.getElementById('pDelBtn').style.display='';
   document.getElementById('pSaveBtn').style.gridColumn='';
-  document.getElementById('pCat').value=p.cat;document.getElementById('pName').value=p.name;
+  populateCatSelect(p.cat);document.getElementById('pName').value=p.name;
   document.getElementById('pSpec').value=p.spec;document.getElementById('pUnit').value=p.unit;
   document.getElementById('pStock').value=p.stock;document.getElementById('pReorder').value=p.reorder;
   document.getElementById('pOrderQty').value=p.orderQty;document.getElementById('pSupplier').value=p.supplier;
