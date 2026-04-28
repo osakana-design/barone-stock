@@ -201,6 +201,19 @@ nav button .nbadge{
 .m-title{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;}
 .m-close{background:var(--bg3);border:none;color:var(--text3);font-size:16px;width:30px;height:30px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 
+
+.po-card{background:#fff;border:1.5px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;box-shadow:var(--sh);}
+.po-head{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg3);border-bottom:1px solid var(--border);}
+.po-no{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--text);flex-shrink:0;}
+.po-sup{font-size:11px;color:var(--text3);flex:1;}
+.po-date{font-size:11px;color:var(--text3);flex-shrink:0;}
+.po-items{padding:8px 14px;}
+.po-item{display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);}
+.po-item:last-child{border-bottom:none;}
+.po-name{font-size:13px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;}
+.po-qty{font-family:'DM Mono',monospace;font-size:12px;color:var(--green);font-weight:600;flex-shrink:0;}
+.po-foot{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border);}
+.po-foot .btn{flex:1;}
 .o-textarea{background:var(--bg3);border:1.5px solid var(--border2);border-radius:8px;padding:12px;font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);width:100%;min-height:200px;resize:none;margin-top:12px;white-space:pre;overflow:auto;line-height:1.6;}
 
 .toast{position:fixed;bottom:calc(var(--nav-h) + 12px);left:50%;transform:translateX(-50%) translateY(8px);background:#1a1a1a;color:#fff;border-radius:24px;padding:10px 20px;z-index:300;font-size:13px;font-weight:600;white-space:nowrap;display:none;opacity:0;transition:opacity .2s,transform .2s;}
@@ -340,6 +353,7 @@ nav button .nbadge{
 const PRODUCTS_KEY = 'barone_v2_products';
 const RECEIPTS_KEY = 'barone_v2_receipts';
 const NEXTID_KEY   = 'barone_v2_nextId';
+const ORDERS_KEY   = 'barone_v2_orders';
 
 const DEFAULT = [
   {id:1,  cat:"ビール",          name:"アサヒ スーパードライ 中瓶",              spec:"中瓶",    unit:"本", stock:24, reorder:12, orderQty:24, supplier:"奥野さん"},
@@ -381,20 +395,23 @@ const DEFAULT = [
   {id:37, cat:"割材",           name:"いろはす",                              spec:"2L",      unit:"本", stock:6,  reorder:3,  orderQty:6,  supplier:"その他"},
 ];
 
-let products=[], receipts=[], nextId=200;
+let products=[], receipts=[], orders=[], nextId=200;
 let currentFilter="すべて", orderSupFilter="すべて", editStockId=null, editProdId=null;
 
 function load(){
   const p=localStorage.getItem(PRODUCTS_KEY);
   const r=localStorage.getItem(RECEIPTS_KEY);
   const n=localStorage.getItem(NEXTID_KEY);
+  const o=localStorage.getItem(ORDERS_KEY);
   products = p ? JSON.parse(p) : JSON.parse(JSON.stringify(DEFAULT));
   receipts = r ? JSON.parse(r) : [];
+  orders   = o ? JSON.parse(o) : [];
   nextId   = n ? parseInt(n) : 200;
 }
 function save(){
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
   localStorage.setItem(RECEIPTS_KEY,JSON.stringify(receipts));
+  localStorage.setItem(ORDERS_KEY,JSON.stringify(orders));
   localStorage.setItem(NEXTID_KEY,String(nextId));
 }
 
@@ -403,7 +420,7 @@ function showScreen(id,btn){
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   document.getElementById('screen-'+id).classList.add('active');
   btn.classList.add('active');
-  ({stock:renderStock,order:renderOrder,receive:()=>{renderReceiveForm();renderReceiveLog();},settings:renderSettings})[id]?.();
+  ({stock:renderStock,order:renderOrder,receive:()=>{renderReceiveForm();renderPendingOrders();renderReceiveLog();},settings:renderSettings})[id]?.();
 }
 
 function cats(){ return ["すべて",...new Set(products.map(p=>p.cat))]; }
@@ -504,11 +521,27 @@ function genOrderText(){
   document.getElementById('orderText').value=t;
   openModal('orderModal');
 }
+function genOrderNo(){
+  const d=new Date();
+  const yy=String(d.getFullYear()).slice(2);
+  const mm=String(d.getMonth()+1).padStart(2,'0');
+  const dd=String(d.getDate()).padStart(2,'0');
+  const prefix=yy+mm+dd;
+  const today=orders.filter(o=>o.no.startsWith(prefix));
+  return prefix+'_'+String(today.length+1);
+}
 function confirmOrder(){
   const low=getLow();
   const filtered=orderSupFilter==="すべて"?low:low.filter(p=>p.supplier===orderSupFilter);
-  filtered.forEach(p=>{const el=document.getElementById('oq_'+p.id);p.stock+=el?parseInt(el.value)||p.orderQty:p.orderQty;});
-  save();renderOrder();updateBadges();toast('発注完了！在庫に加算しました');
+  if(!filtered.length){toast('発注する商品がありません');return;}
+  const no=genOrderNo();
+  const items=filtered.map(p=>{
+    const el=document.getElementById('oq_'+p.id);
+    const qty=el?parseInt(el.value)||p.orderQty:p.orderQty;
+    return {productId:p.id,productName:p.name,spec:p.spec,unit:p.unit,qty,supplier:p.supplier};
+  });
+  orders.unshift({no,date:new Date().toISOString(),items,status:'pending'});
+  save();renderOrder();updateBadges();toast(`発注 ${no} を登録しました`);
 }
 function copyOrder(){
   const t=document.getElementById('orderText').value;
@@ -517,10 +550,59 @@ function copyOrder(){
 function shareOrder(){const t=document.getElementById('orderText').value;navigator.share?navigator.share({text:t}):copyOrder();}
 
 function switchTab(tab){
-  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',(i===0&&tab==='form')||(i===1&&tab==='log')));
+  document.querySelectorAll('#screen-receive .tab-btn').forEach((b,i)=>{
+    b.classList.toggle('active',(i===0&&tab==='orders')||(i===1&&tab==='form')||(i===2&&tab==='log'));
+  });
+  document.getElementById('tab-orders').style.display=tab==='orders'?'block':'none';
   document.getElementById('tab-form').style.display=tab==='form'?'block':'none';
   document.getElementById('tab-log').style.display=tab==='log'?'block':'none';
+  if(tab==='orders')renderPendingOrders();
   if(tab==='log')renderReceiveLog();
+}
+function renderPendingOrders(){
+  const el=document.getElementById('pendingOrders');
+  const pending=orders.filter(o=>o.status==='pending');
+  if(!pending.length){
+    el.innerHTML='<div class="empty"><div class="ei">✅</div><p><strong>発注中の案件はありません</strong>発注タブで発注すると<br>ここに表示されます。</p></div>';
+    return;
+  }
+  el.innerHTML=pending.map(o=>{
+    const d=new Date(o.date);
+    const ds=`${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const suppliers=[...new Set(o.items.map(i=>i.supplier))].join('・');
+    const itemsHtml=o.items.map(i=>`
+      <div class="po-item">
+        <span class="po-name">${i.productName}</span>
+        <span class="po-qty">${i.qty}${i.unit}</span>
+      </div>`).join('');
+    return `<div class="po-card">
+      <div class="po-head">
+        <span class="po-no">${o.no}</span>
+        <span class="po-sup">${suppliers}</span>
+        <span class="po-date">${ds}</span>
+      </div>
+      <div class="po-items">${itemsHtml}</div>
+      <div class="po-foot">
+        <button class="btn btn-outline btn-sm" onclick="cancelOrder('${o.no}')">キャンセル</button>
+        <button class="btn btn-green btn-sm" onclick="receiveOrder('${o.no}')">✓ 入庫する</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function receiveOrder(no){
+  const o=orders.find(x=>x.no===no);if(!o)return;
+  o.items.forEach(i=>{
+    const p=products.find(x=>x.id===i.productId);
+    if(p) p.stock+=i.qty;
+    receipts.unshift({id:nextId++,date:new Date().toISOString(),productName:i.productName,qty:i.qty,unit:i.unit,staff:'',note:`発注 ${no}`,unit:i.unit});
+  });
+  o.status='received';o.receivedDate=new Date().toISOString();
+  save();renderPendingOrders();renderStock();updateBadges();toast(`${no} 入庫しました！`);
+}
+function cancelOrder(no){
+  if(!confirm(`発注 ${no} をキャンセルしますか？`))return;
+  orders=orders.filter(x=>x.no!==no);
+  save();renderPendingOrders();toast('発注をキャンセルしました');
 }
 function renderReceiveForm(){
   const sel=document.getElementById('recvProduct');
