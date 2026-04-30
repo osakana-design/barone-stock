@@ -6,6 +6,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#f7f5f2">
 <title>Bar one — 在庫管理</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -352,71 +354,117 @@ nav button .nbadge{
 <div class="toast" id="toast"></div>
 
 <script>
-const PRODUCTS_KEY = 'barone_v2_products';
-const RECEIPTS_KEY = 'barone_v2_receipts';
-const NEXTID_KEY   = 'barone_v2_nextId';
-const ORDERS_KEY   = 'barone_v2_orders';
+// ── Firebase 設定 ──
+const firebaseConfig = {
+  apiKey: "AIzaSyCroY51yoVGefLhYzmO9QoLtqBDzKFUgP8",
+  authDomain: "barone-stock.firebaseapp.com",
+  databaseURL: "https://barone-stock-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "barone-stock",
+  storageBucket: "barone-stock.firebasestorage.app",
+  messagingSenderId: "848515674572",
+  appId: "1:848515674572:web:fb999d39f8b7f4c4c52d69"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
+// ── 初期データ ──
 const DEFAULT = [
-  {id:1,  cat:"ビール",          name:"アサヒ スーパードライ 中瓶",              spec:"中瓶",    unit:"本", stock:24, reorder:12, orderQty:24, supplier:"奥野さん"},
-  {id:2,  cat:"ハイボール",      name:"サントリー 角瓶",                        spec:"5L",      unit:"本", stock:1,  reorder:1,  orderQty:1,  supplier:"奥野さん"},
-  {id:3,  cat:"ハイボール",      name:"サントリー 白州",                        spec:"700ml",   unit:"本", stock:2,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:4,  cat:"焼酎",           name:"大分むぎ焼酎 二階堂",                    spec:"1.8L",    unit:"本", stock:2,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:5,  cat:"焼酎",           name:"吉四六 瓶",                             spec:"720ml",   unit:"本", stock:2,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:6,  cat:"焼酎",           name:"霧島酒造 黒霧島",                        spec:"1.8L",    unit:"本", stock:2,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:7,  cat:"焼酎",           name:"サントリー ジャスミン焼酎 茉莉花",        spec:"1.8L",    unit:"本", stock:2,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:8,  cat:"酎ハイ",         name:"サッポロ サワー氷彩",                    spec:"1.8L",    unit:"本", stock:1,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:9,  cat:"酎ハイ",         name:"サッポロ 濃いめのレモンサワー",           spec:"1.8L",    unit:"本", stock:1,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:10, cat:"酎ハイ",         name:"サッポロ 濃いめのグレフルサワー",         spec:"1.8L",    unit:"本", stock:1,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:11, cat:"酎ハイ",         name:"サッポロ 男梅サワー",                    spec:"1.8L",    unit:"本", stock:1,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:12, cat:"酎ハイ",         name:"アサヒ 果実の酒 巨峰酒",                spec:"1.8L",    unit:"本", stock:1,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:13, cat:"酎ハイ",         name:"サントリー プロサワー すっきりトマト",    spec:"1.8L",    unit:"本", stock:1,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:14, cat:"酎ハイ",         name:"サントリー プロサワー ゆず",             spec:"1.8L",    unit:"本", stock:1,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:15, cat:"カクテル",        name:"ボルス クレームドカシス",                spec:"700ml",   unit:"本", stock:2,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:16, cat:"カクテル",        name:"ボルス ピーチ",                          spec:"700ml",   unit:"本", stock:2,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:17, cat:"カクテル",        name:"カルーア コーヒーリキュール",            spec:"700ml",   unit:"本", stock:2,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:18, cat:"テキーラ",        name:"クエルボ・エスペシャル",                 spec:"750ml",   unit:"本", stock:1,  reorder:1,  orderQty:1,  supplier:"奥野さん"},
-  {id:19, cat:"テキーラ",        name:"クエルボ・エスペシャル・シルバー",       spec:"750ml",   unit:"本", stock:1,  reorder:1,  orderQty:1,  supplier:"奥野さん"},
-  {id:20, cat:"クライナー",      name:"クライナー",                             spec:"—",       unit:"本", stock:10, reorder:5,  orderQty:10, supplier:"奥野さん"},
-  {id:21, cat:"梅酒",           name:"チョーヤ さらりとした梅酒",              spec:"1.8L",    unit:"本", stock:1,  reorder:1,  orderQty:1,  supplier:"奥野さん"},
-  {id:22, cat:"オリシャン",      name:"リステル",                               spec:"750ml",   unit:"本", stock:2,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:23, cat:"オリシャン",      name:"パラシオコルソン",                       spec:"750ml",   unit:"本", stock:2,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:24, cat:"オリシャン",      name:"ニコラフィアット",                       spec:"750ml",   unit:"本", stock:2,  reorder:1,  orderQty:2,  supplier:"奥野さん"},
-  {id:25, cat:"オリシャン",      name:"ドンペリ",                               spec:"750ml",   unit:"本", stock:1,  reorder:1,  orderQty:1,  supplier:"奥野さん"},
-  {id:26, cat:"ノンアルコール",  name:"アサヒ ドライゼロ",                      spec:"瓶",      unit:"本", stock:12, reorder:6,  orderQty:12, supplier:"奥野さん"},
-  {id:27, cat:"ノンアルコール",  name:"スタイルバランス ハイボール",            spec:"缶",      unit:"本", stock:6,  reorder:3,  orderQty:6,  supplier:"奥野さん"},
-  {id:28, cat:"ノンアルコール",  name:"スタイルバランス カシスオレンジ",        spec:"缶",      unit:"本", stock:6,  reorder:3,  orderQty:6,  supplier:"奥野さん"},
-  {id:29, cat:"ノンアルコール",  name:"スタイルバランス レモンサワー",          spec:"缶",      unit:"本", stock:6,  reorder:3,  orderQty:6,  supplier:"奥野さん"},
-  {id:30, cat:"ノンアルコール",  name:"スタイルバランス スパークリング",        spec:"缶",      unit:"本", stock:6,  reorder:3,  orderQty:6,  supplier:"奥野さん"},
-  {id:31, cat:"ソフトドリンク",  name:"烏龍茶",                                spec:"2L",      unit:"本", stock:4,  reorder:2,  orderQty:4,  supplier:"その他"},
-  {id:32, cat:"ソフトドリンク",  name:"緑茶",                                  spec:"2L",      unit:"本", stock:4,  reorder:2,  orderQty:4,  supplier:"その他"},
-  {id:33, cat:"ソフトドリンク",  name:"コーラ 瓶",                             spec:"190ml",   unit:"本", stock:12, reorder:6,  orderQty:12, supplier:"その他"},
-  {id:34, cat:"ソフトドリンク",  name:"アグロスオレンジ 果汁100%",             spec:"1L",      unit:"本", stock:4,  reorder:2,  orderQty:4,  supplier:"その他"},
-  {id:35, cat:"割材",           name:"ウィルキンソンタンサン 缶",              spec:"190ml",   unit:"本", stock:24, reorder:12, orderQty:24, supplier:"その他"},
-  {id:36, cat:"割材",           name:"ウィルキンソンタンサン PET",             spec:"500ml",   unit:"本", stock:12, reorder:6,  orderQty:12, supplier:"その他"},
-  {id:37, cat:"割材",           name:"いろはす",                              spec:"2L",      unit:"本", stock:6,  reorder:3,  orderQty:6,  supplier:"その他"},
+  {id:1,  cat:"ビール",         name:"アサヒ スーパードライ 中瓶",           spec:"中瓶",  unit:"本",stock:0,reorder:12,orderQty:24,supplier:"奥野さん"},
+  {id:2,  cat:"ハイボール",     name:"サントリー 角瓶",                      spec:"5L",    unit:"本",stock:0,reorder:1, orderQty:1, supplier:"奥野さん"},
+  {id:3,  cat:"ハイボール",     name:"サントリー 白州",                      spec:"700ml", unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:4,  cat:"焼酎",          name:"大分むぎ焼酎 二階堂",                  spec:"1.8L",  unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:5,  cat:"焼酎",          name:"吉四六 瓶",                           spec:"720ml", unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:6,  cat:"焼酎",          name:"霧島酒造 黒霧島",                      spec:"1.8L",  unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:7,  cat:"焼酎",          name:"サントリー ジャスミン焼酎 茉莉花",     spec:"1.8L",  unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:8,  cat:"酎ハイ",        name:"サッポロ サワー氷彩",                  spec:"1.8L",  unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:9,  cat:"酎ハイ",        name:"サッポロ 濃いめのレモンサワー",        spec:"1.8L",  unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:10, cat:"酎ハイ",        name:"サッポロ 濃いめのグレフルサワー",      spec:"1.8L",  unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:11, cat:"酎ハイ",        name:"サッポロ 男梅サワー",                  spec:"1.8L",  unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:12, cat:"酎ハイ",        name:"アサヒ 果実の酒 巨峰酒",              spec:"1.8L",  unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:13, cat:"酎ハイ",        name:"サントリー プロサワー すっきりトマト", spec:"1.8L",  unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:14, cat:"酎ハイ",        name:"サントリー プロサワー ゆず",           spec:"1.8L",  unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:15, cat:"カクテル",      name:"ボルス クレームドカシス",              spec:"700ml", unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:16, cat:"カクテル",      name:"ボルス ピーチ",                        spec:"700ml", unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:17, cat:"カクテル",      name:"カルーア コーヒーリキュール",          spec:"700ml", unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:18, cat:"テキーラ",      name:"クエルボ・エスペシャル",               spec:"750ml", unit:"本",stock:0,reorder:1, orderQty:1, supplier:"奥野さん"},
+  {id:19, cat:"テキーラ",      name:"クエルボ・エスペシャル・シルバー",     spec:"750ml", unit:"本",stock:0,reorder:1, orderQty:1, supplier:"奥野さん"},
+  {id:20, cat:"クライナー",    name:"クライナー",                          spec:"—",     unit:"本",stock:0,reorder:5, orderQty:10,supplier:"奥野さん"},
+  {id:21, cat:"梅酒",          name:"チョーヤ さらりとした梅酒",            spec:"1.8L",  unit:"本",stock:0,reorder:1, orderQty:1, supplier:"奥野さん"},
+  {id:22, cat:"オリシャン",    name:"リステル",                            spec:"750ml", unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:23, cat:"オリシャン",    name:"パラシオコルソン",                     spec:"750ml", unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:24, cat:"オリシャン",    name:"ニコラフィアット",                     spec:"750ml", unit:"本",stock:0,reorder:1, orderQty:2, supplier:"奥野さん"},
+  {id:25, cat:"オリシャン",    name:"ドンペリ",                            spec:"750ml", unit:"本",stock:0,reorder:1, orderQty:1, supplier:"奥野さん"},
+  {id:26, cat:"ノンアルコール",name:"アサヒ ドライゼロ",                   spec:"瓶",    unit:"本",stock:0,reorder:6, orderQty:12,supplier:"奥野さん"},
+  {id:27, cat:"ノンアルコール",name:"スタイルバランス ハイボール",          spec:"缶",    unit:"本",stock:0,reorder:3, orderQty:6, supplier:"奥野さん"},
+  {id:28, cat:"ノンアルコール",name:"スタイルバランス カシスオレンジ",      spec:"缶",    unit:"本",stock:0,reorder:3, orderQty:6, supplier:"奥野さん"},
+  {id:29, cat:"ノンアルコール",name:"スタイルバランス レモンサワー",        spec:"缶",    unit:"本",stock:0,reorder:3, orderQty:6, supplier:"奥野さん"},
+  {id:30, cat:"ノンアルコール",name:"スタイルバランス スパークリング",      spec:"缶",    unit:"本",stock:0,reorder:3, orderQty:6, supplier:"奥野さん"},
+  {id:31, cat:"ソフトドリンク",name:"烏龍茶",                              spec:"2L",    unit:"本",stock:0,reorder:2, orderQty:4, supplier:"その他"},
+  {id:32, cat:"ソフトドリンク",name:"緑茶",                                spec:"2L",    unit:"本",stock:0,reorder:2, orderQty:4, supplier:"その他"},
+  {id:33, cat:"ソフトドリンク",name:"コーラ 瓶",                           spec:"190ml", unit:"本",stock:0,reorder:6, orderQty:12,supplier:"その他"},
+  {id:34, cat:"ソフトドリンク",name:"アグロスオレンジ 果汁100%",           spec:"1L",    unit:"本",stock:0,reorder:2, orderQty:4, supplier:"その他"},
+  {id:35, cat:"割材",          name:"ウィルキンソンタンサン 缶",           spec:"190ml", unit:"本",stock:0,reorder:12,orderQty:24,supplier:"その他"},
+  {id:36, cat:"割材",          name:"ウィルキンソンタンサン PET",          spec:"500ml", unit:"本",stock:0,reorder:6, orderQty:12,supplier:"その他"},
+  {id:37, cat:"割材",          name:"いろはす",                           spec:"2L",    unit:"本",stock:0,reorder:3, orderQty:6, supplier:"その他"},
 ];
 
-let products=[], receipts=[], orders=[], nextId=200;
-let currentFilter="すべて", orderSupFilter="すべて", editStockId=null, editProdId=null;
+// ── State ──
+var products=[], receipts=[], orders=[], nextId=200;
+var currentFilter="すべて", orderSupFilter="すべて", editStockId=null, editProdId=null;
+var ready=false;
 
-function load(){
-  const p=localStorage.getItem(PRODUCTS_KEY);
-  const r=localStorage.getItem(RECEIPTS_KEY);
-  const n=localStorage.getItem(NEXTID_KEY);
-  const o=localStorage.getItem(ORDERS_KEY);
-  products = p ? JSON.parse(p) : JSON.parse(JSON.stringify(DEFAULT));
-  receipts = r ? JSON.parse(r) : [];
-  orders   = o ? JSON.parse(o) : [];
-  nextId   = n ? parseInt(n) : 200;
+// ── Firebase リアルタイム同期 ──
+function initFirebase(){
+  showLoading(true);
+  // products
+  db.ref('products').on('value', snap=>{
+    const val=snap.val();
+    products = val ? (Array.isArray(val) ? val : Object.values(val)) : JSON.parse(JSON.stringify(DEFAULT));
+    if(!val) db.ref('products').set(products); // 初回のみデフォルトを書き込み
+    if(ready){ renderStock(); updateBadges(); }
+  });
+  // receipts
+  db.ref('receipts').on('value', snap=>{
+    const val=snap.val();
+    receipts = val ? (Array.isArray(val) ? val : Object.values(val)) : [];
+    if(ready){ /* 入荷履歴は表示中のタブのみ更新 */ }
+  });
+  // orders
+  db.ref('orders').on('value', snap=>{
+    const val=snap.val();
+    orders = val ? (Array.isArray(val) ? val : Object.values(val)) : [];
+    if(ready){ /* 発注中リストは表示中のタブのみ更新 */ }
+  });
+  // nextId
+  db.ref('nextId').once('value', snap=>{
+    nextId = snap.val() || 200;
+    showLoading(false);
+    ready=true;
+    renderStock();
+    updateBadges();
+  });
 }
+
 function save(){
-  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
-  localStorage.setItem(RECEIPTS_KEY,JSON.stringify(receipts));
-  localStorage.setItem(ORDERS_KEY,JSON.stringify(orders));
-  localStorage.setItem(NEXTID_KEY,String(nextId));
+  db.ref('products').set(products);
+  db.ref('receipts').set(receipts);
+  db.ref('orders').set(orders);
+  db.ref('nextId').set(nextId);
 }
 
+function showLoading(on){
+  let el=document.getElementById('loadingOverlay');
+  if(!el){
+    el=document.createElement('div');
+    el.id='loadingOverlay';
+    el.style.cssText='position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:12px;font-family:Barlow,sans-serif;color:#999;font-size:14px;';
+    el.innerHTML='<div style="font-size:28px">🔄</div><div>接続中...</div>';
+    document.body.appendChild(el);
+  }
+  el.style.display=on?'flex':'none';
+}
+
+// ── Nav ──
 function showScreen(id,btn){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
@@ -425,18 +473,16 @@ function showScreen(id,btn){
   ({stock:renderStock,order:renderOrder,receive:()=>{renderReceiveForm();renderPendingOrders();renderReceiveLog();},settings:renderSettings})[id]?.();
 }
 
+// ── 在庫 ──
 function cats(){ return ["すべて",...new Set(products.map(p=>p.cat))]; }
-
 function renderStock(){
   document.getElementById('catFilter').innerHTML=cats().map(c=>`<button class="chip ${c===currentFilter?'active':''}" onclick="setFilter('${c}')">${c}</button>`).join('');
   const filtered=currentFilter==="すべて"?products:products.filter(p=>p.cat===currentFilter);
   const grouped={};
   filtered.forEach(p=>{if(!grouped[p.cat])grouped[p.cat]=[];grouped[p.cat].push(p);});
-  const list=document.getElementById('stockList');
-  list.innerHTML='';
+  const list=document.getElementById('stockList');list.innerHTML='';
   Object.entries(grouped).forEach(([cat,items])=>{
-    const g=document.createElement('div');
-    g.className='cat-group';
+    const g=document.createElement('div');g.className='cat-group';
     if(currentFilter==="すべて") g.innerHTML=`<div class="cat-lbl">${cat}</div>`;
     items.forEach(p=>{
       const low=p.stock<=p.reorder;
@@ -474,39 +520,34 @@ function saveStock(){
   save();closeModal('stockModal');renderStock();toast('在庫を更新しました');
 }
 
+// ── 発注 ──
 function getLow(){return products.filter(p=>p.stock<=p.reorder);}
 function renderOrder(){
   const low=getLow();
   const el=document.getElementById('orderContent');
   const suppliers=["すべて",...new Set(low.map(p=>p.supplier))];
-  // supplier filter chips
   document.getElementById('supplierFilter').innerHTML=suppliers.map(s=>
     `<button class="chip ${s===orderSupFilter?'active':''}" onclick="setOrderFilter('${s}')">${s}</button>`
   ).join('');
-  if(!low.length){el.innerHTML=`<div class="empty"><div class="ei">✅</div><p><strong>発注が必要な商品はありません</strong>在庫に余裕があります。</p></div>`;return;}
+  if(!low.length){el.innerHTML=`<div class="empty"><div class="ei">✅</div><p><strong>発注が必要な商品はありません</strong></p></div>`;return;}
   const filtered=orderSupFilter==="すべて"?low:low.filter(p=>p.supplier===orderSupFilter);
-  const byS={};
-  filtered.forEach(p=>{if(!byS[p.supplier])byS[p.supplier]=[];byS[p.supplier].push(p);});
+  if(!filtered.length){el.innerHTML=`<div class="empty"><div class="ei">✅</div><p>この発注先の要発注商品はありません</p></div>`;return;}
+  const byS={};filtered.forEach(p=>{if(!byS[p.supplier])byS[p.supplier]=[];byS[p.supplier].push(p);});
   let h='';
-  if(!filtered.length){
-    el.innerHTML=`<div class="empty"><div class="ei">✅</div><p>選択した発注先の要発注商品はありません。</p></div>`;return;
-  }
-  h+=`<div class="order-banner"><span class="bi">⚠️</span><p><strong>${filtered.length}品目</strong>の発注が必要です。<br>数量を確認して発注してください。</p></div>`;
+  h+=`<div class="order-banner"><span class="bi">⚠️</span><p><strong>${filtered.length}品目</strong>の発注が必要です。数量を確認してください。</p></div>`;
   Object.entries(byS).forEach(([sup,items])=>{
     h+=`<div class="sec-title">${sup}</div>`;
-    items.forEach(p=>{
-      h+=`<div class="o-item">
-        <div class="o-top"><span class="o-name">${p.name}</span><span class="o-spec">${p.spec}</span></div>
-        <div class="o-bot">
-          <span class="o-lbl">現在庫</span><span class="o-stk">${p.stock}${p.unit}</span><span class="o-arr">→</span>
-          <div class="o-qty-wrap"><span class="o-qty-lbl">発注</span><input type="number" class="o-qty-in" id="oq_${p.id}" value="${p.orderQty}" min="1"><span class="o-qty-unit">${p.unit}</span></div>
-        </div>
-      </div>`;
-    });
+    items.forEach(p=>{h+=`<div class="o-item">
+      <div class="o-top"><span class="o-name">${p.name}</span><span class="o-spec">${p.spec}</span></div>
+      <div class="o-bot">
+        <span class="o-lbl">現在庫</span><span class="o-stk">${p.stock}${p.unit}</span><span class="o-arr">→</span>
+        <div class="o-qty-wrap"><span class="o-qty-lbl">発注</span><input type="number" class="o-qty-in" id="oq_${p.id}" value="${p.orderQty}" min="1"><span class="o-qty-unit">${p.unit}</span></div>
+      </div>
+    </div>`;});
   });
   h+=`<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
     <button class="btn btn-outline" onclick="genOrderText()">テキスト生成</button>
-    <button class="btn btn-primary" onclick="confirmOrder()">✓ 発注登録</button>
+    <button class="btn btn-primary" onclick="confirmOrder()">✓ 発注完了</button>
   </div>`;
   el.innerHTML=h;
 }
@@ -517,8 +558,12 @@ function genOrderText(){
   const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
   const byS={};
   filtered.forEach(p=>{const q=parseInt(document.getElementById('oq_'+p.id)?.value)||p.orderQty;if(!byS[p.supplier])byS[p.supplier]=[];byS[p.supplier].push({...p,qty:q});});
-  let t=`Bar one 発注連絡\n${today}\n\n`;
-  Object.entries(byS).forEach(([sup,items])=>{t+=`【${sup} 宛】\n`;items.forEach(i=>t+=`  ・${i.name}（${i.spec}）× ${i.qty}${i.unit}\n`);t+='\n';});
+  let t=`Bar one 発注連絡
+${today}
+
+`;
+  Object.entries(byS).forEach(([sup,items])=>{t+=`【${sup} 宛】\n`;items.forEach(i=>t+=`  ・${i.name}（${i.spec}）× ${i.qty}${i.unit}
+`);t+='\n';});
   t+='よろしくお願いいたします。';
   document.getElementById('orderText').value=t;
   openModal('orderModal');
@@ -529,8 +574,8 @@ function genOrderNo(){
   const mm=String(d.getMonth()+1).padStart(2,'0');
   const dd=String(d.getDate()).padStart(2,'0');
   const prefix=yy+mm+dd;
-  const today=orders.filter(o=>o.no.startsWith(prefix));
-  return prefix+'_'+String(today.length+1);
+  const todayOrders=orders.filter(o=>o.no.startsWith(prefix));
+  return prefix+'_'+String(todayOrders.length+1);
 }
 function confirmOrder(){
   const low=getLow();
@@ -551,6 +596,7 @@ function copyOrder(){
 }
 function shareOrder(){const t=document.getElementById('orderText').value;navigator.share?navigator.share({text:t}):copyOrder();}
 
+// ── 入荷 ──
 function switchTab(tab){
   document.querySelectorAll('#screen-receive .tab-btn').forEach((b,i)=>{
     b.classList.toggle('active',(i===0&&tab==='orders')||(i===1&&tab==='form')||(i===2&&tab==='log'));
@@ -565,24 +611,16 @@ function renderPendingOrders(){
   const el=document.getElementById('pendingOrders');
   const pending=orders.filter(o=>o.status==='pending');
   if(!pending.length){
-    el.innerHTML='<div class="empty"><div class="ei">✅</div><p><strong>発注中の案件はありません</strong>発注タブで発注すると<br>ここに表示されます。</p></div>';
+    el.innerHTML='<div class="empty"><div class="ei">✅</div><p><strong>発注中の案件はありません</strong><br>発注タブで発注するとここに表示されます。</p></div>';
     return;
   }
   el.innerHTML=pending.map(o=>{
     const d=new Date(o.date);
     const ds=`${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
     const suppliers=[...new Set(o.items.map(i=>i.supplier))].join('・');
-    const itemsHtml=o.items.map(i=>`
-      <div class="po-item">
-        <span class="po-name">${i.productName}</span>
-        <span class="po-qty">${i.qty}${i.unit}</span>
-      </div>`).join('');
+    const itemsHtml=o.items.map(i=>`<div class="po-item"><span class="po-name">${i.productName}</span><span class="po-qty">${i.qty}${i.unit}</span></div>`).join('');
     return `<div class="po-card">
-      <div class="po-head">
-        <span class="po-no">${o.no}</span>
-        <span class="po-sup">${suppliers}</span>
-        <span class="po-date">${ds}</span>
-      </div>
+      <div class="po-head"><span class="po-no">${o.no}</span><span class="po-sup">${suppliers}</span><span class="po-date">${ds}</span></div>
       <div class="po-items">${itemsHtml}</div>
       <div class="po-foot">
         <button class="btn btn-outline btn-sm" onclick="cancelOrder('${o.no}')">キャンセル</button>
@@ -622,8 +660,7 @@ function submitReceive(){
   p.stock+=qty;
   receipts.unshift({id:nextId++,date:new Date().toISOString(),productName:p.name,qty,staff,note,unit:p.unit});
   save();
-  document.getElementById('recvQty').value='';
-  document.getElementById('recvNote').value='';
+  document.getElementById('recvQty').value='';document.getElementById('recvNote').value='';
   renderReceiveLog();updateBadges();toast(`${p.name} +${qty}${p.unit} 登録しました`);
 }
 function renderReceiveLog(){
@@ -636,6 +673,7 @@ function renderReceiveLog(){
   }).join('');
 }
 
+// ── 設定 ──
 function renderSettings(){
   document.getElementById('settingsList').innerHTML=products.map(p=>`
     <div class="s-item" onclick="openEditProduct(${p.id})">
@@ -647,17 +685,13 @@ function renderSettings(){
 function populateCatSelect(selected){
   const existingCats=[...new Set(products.map(p=>p.cat))];
   const sel=document.getElementById('pCat');
-  sel.innerHTML=existingCats.map(c=>`<option value="${c}" ${c===selected?'selected':''}>${c}</option>`).join('')
-    +'<option value="__new__">＋ 新しいカテゴリを入力...</option>';
+  sel.innerHTML=existingCats.map(c=>`<option value="${c}" ${c===selected?'selected':''}>${c}</option>`)
+    .join('')+'<option value="__new__">＋ 新しいカテゴリを入力...</option>';
   sel.onchange=function(){
     if(this.value==='__new__'){
-      const v=prompt('新しいカテゴリ名を入力してください');
-      if(v&&v.trim()){
-        const opt=document.createElement('option');
-        opt.value=v.trim();opt.textContent=v.trim();
-        this.insertBefore(opt,this.lastElementChild);
-        this.value=v.trim();
-      } else { this.value=existingCats[0]||'その他'; }
+      const v=prompt('新しいカテゴリ名');
+      if(v&&v.trim()){const o=document.createElement('option');o.value=v.trim();o.textContent=v.trim();this.insertBefore(o,this.lastElementChild);this.value=v.trim();}
+      else this.value=existingCats[0]||'その他';
     }
   };
 }
@@ -698,13 +732,16 @@ function deleteProduct(){
 }
 function exportData(){const a=document.createElement('a');a.href='data:application/json,'+encodeURIComponent(JSON.stringify({products,receipts},null,2));a.download='barone_data.json';a.click();}
 function importData(){const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=e=>{const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.products)products=d.products;if(d.receipts)receipts=d.receipts;save();renderSettings();renderStock();updateBadges();toast('インポートしました');}catch{toast('読み込みに失敗しました');}};r.readAsText(e.target.files[0]);};inp.click();}
-function resetData(){if(!confirm('全データをリセットしますか？'))return;products=JSON.parse(JSON.stringify(DEFAULT));receipts=[];nextId=200;save();renderSettings();renderStock();updateBadges();toast('リセットしました');}
+function resetData(){if(!confirm('全データをリセットしますか？'))return;products=JSON.parse(JSON.stringify(DEFAULT));receipts=[];orders=[];nextId=200;save();renderSettings();renderStock();updateBadges();toast('リセットしました');}
 
+// ── バッジ ──
 function updateBadges(){
   const n=getLow().length;
   const b=document.getElementById('orderBadge');b.textContent=n;b.style.display=n>0?'flex':'none';
   const h=document.getElementById('alertBadge');h.textContent=`要発注 ${n}件`;h.classList.toggle('on',n>0);
 }
+
+// ── モーダル ──
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.addEventListener('keydown',e=>{
@@ -712,10 +749,12 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Enter' && document.getElementById('stockModal').classList.contains('open')) saveStock();
 });
 
+// ── トースト ──
 let toastTimer;
 function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400);}
 
-load();renderStock();updateBadges();
+// ── 起動 ──
+window.addEventListener("load", function(){ initFirebase(); });
 </script>
 </body>
 </html>
